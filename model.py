@@ -25,19 +25,9 @@ class RllibPPOModel(TFModelV2):
         self.inputs = tf.keras.Input(shape=obs_space.shape, name="observations")
         out = self.inputs
 
-        # Apply initial conv layer with a larger kenel (why?)
-        if num_convs > 0:
-            out = tf.keras.layers.Conv2D(
-                filters=num_filters,
-                kernel_size=[5, 5],
-                padding="same",
-                activation=tf.nn.leaky_relu,
-                name="conv_initial"
-            )(out)
-
         # Apply remaining conv layers, if any
-        for i in range(0, num_convs-1):
-            padding = "same" if i < num_convs - 2 else "valid"
+        for i in range(0, num_convs):
+            padding = "same"
             out = tf.keras.layers.Conv2D(
                 filters=num_filters,
                 kernel_size=[3, 3],
@@ -50,8 +40,6 @@ class RllibPPOModel(TFModelV2):
         conv_out = tf.keras.layers.Flatten()(out)
         out = conv_out
         for i in range(num_hidden_layers):
-            if i > 0 and d2rl:
-                out = tf.keras.layers.Concatenate()([out, conv_out])
             out = tf.keras.layers.Dense(size_hidden_layers)(out)
             out = tf.keras.layers.LeakyReLU()(out)
 

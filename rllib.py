@@ -64,15 +64,15 @@ class ConnectFourMultiAgent(MultiAgentEnv):
         return (self.config['rows'], self.config['columns'])
 
     def default_featurize_fn(self, observation, player=1):
-        board = observation['board'].reshape(self.config['rows'], self.config['columns'])
+        board = np.array(observation['board']).reshape(self.config['rows'], self.config['columns'])
         timestep = observation['step']
 
         other_player = 2 if player == 1 else 1
 
-        my_tiles = (board == player).asytpe(int)
+        my_tiles = (board == player).astype(int)
         their_tiles = (board == other_player).astype(int)
 
-        my_obs = np.concat([my_tiles, their_tiles])
+        my_obs = np.array([my_tiles, their_tiles]).transpose(1, 2, 0)
 
         return my_obs
     
@@ -91,14 +91,16 @@ class ConnectFourMultiAgent(MultiAgentEnv):
             schedule.append((float('inf'), schedule[-1][1]))
 
     def _setup_observation_space(self):
-        obs_shape = self._get_featurize_fn(1)(self.base_env.state[0]['observation']).shape
+        single_frame_shape = self._get_featurize_fn(1)(self.base_env.state[0]['observation']).shape
+        obs_shape = list(single_frame_shape)
+        obs_shape[-1] *= self.buffer_size
         low = np.ones(obs_shape) * 0
         high = np.ones(obs_shape) * 1
         self.observation_space = gym.spaces.Box(np.float32(low), np.float32(high), dtype=np.float32)
 
         for _ in range(self.buffer_size):
-            self.p1_buffer.append(np.zeros(obs_shape))
-            self.p2_buffer.append(np.zeros(obs_shape))
+            self.p1_buffer.append(np.zeros(single_frame_shape))
+            self.p2_buffer.append(np.zeros(single_frame_shape))
 
     def _get_featurize_fn(self, player):
         return lambda observation : self.default_featurize_fn(observation, player)
@@ -113,14 +115,16 @@ class ConnectFourMultiAgent(MultiAgentEnv):
             p1_obs = self._get_featurize_fn(1)(p1_obs)
             self.p1_buffer.pop(0)
             self.p1_buffer.append(p1_obs)
-            obs_dict[self.curr_agents[0]] = np.concat(self.p1_buffer)
+            obs = np.concatenate(self.p1_buffer, axis=-1)
+            obs_dict[self.curr_agents[0]] = obs
 
         if p2_status == self.ACTIVE:
             p2_obs = self._get_featurize_fn(2)(p2_obs)
             self.p1_buffer.pop(0)
             self.p2_buffer.append(p2_obs)
-            obs_dict[self.curr_agents[1]] = np.concat(self.p2_buffer)
-
+            obs = np.concatenate(self.p2_buffer, axis=-1)
+            obs_dict[self.curr_agents[1]] = obs
+        
         return obs_dict
 
     def _get_reward_dict(self, state):
@@ -147,7 +151,7 @@ class ConnectFourMultiAgent(MultiAgentEnv):
 
         return info_dict
 
-    def get_done_dict(self, state):
+    def _get_done_dict(self, state):
         p1_status = state[0]['status']
         p2_status = state[1]['status']
 
@@ -211,7 +215,7 @@ class ConnectFourMultiAgent(MultiAgentEnv):
             dones (dict): by-agent done flags
             infos (dict): by-agent info dictionaries
         """
-        action = [action_dict[self.curr_agents[0]], action_dict[self.curr_agents[1]]]
+        action = [action_dict.get(self.curr_agents[0], 0), action_dict.get(self.curr_agents[1], 0)]
         assert all(self.action_space.contains(a) for a in action), "%r (%s) invalid"%(action, type(action))
         self.base_env.step(action)
 
@@ -269,6 +273,10 @@ def gen_trainer_from_params(params):
     multi_agent_params = params['environment_params']['multi_agent_params']
 
     env = ConnectFourMultiAgent.from_config(environment_params)
+
+    import tensorflow as tf
+    if tf.executing_eagerly():
+        print("AHHHHHH")
 
     # Returns a properly formatted policy tuple to be passed into ppotrainer config
     def gen_policy(policy_type="ppo"):

@@ -27,8 +27,8 @@ if os.path.exists('slack.json') and not LOCAL_TESTING:
 # This is because rllib disables eager execution. Otherwise, it must be manually disabled
 import ray
 from ray.tune.result import DEFAULT_RESULTS_DIR
-from human_aware_rl.ppo.ppo_rllib import RllibPPOModel
-from human_aware_rl.rllib.rllib import save_trainer, gen_trainer_from_params
+from model import RllibPPOModel
+from rllib import save_trainer, gen_trainer_from_params
 
 
 ###################### Temp Documentation #######################
